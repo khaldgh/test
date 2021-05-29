@@ -1,0 +1,165 @@
+
+
+I'm using this sqflite database, trying to use readAllPlaces().
+
+
+import 'package:flutter/cupertino.dart';
+import 'package:path/path.dart';
+import 'package:sqflite/sqflite.dart';
+import 'package:daleel/models/place.dart';
+class PlaceDatabase with ChangeNotifier {
+  PlaceDatabase();
+  static final PlaceDatabase instance = PlaceDatabase._init();
+
+  static Database _database;
+
+  PlaceDatabase._init();
+
+  Future<Database> get database async {
+    if (_database != null) return _database;
+
+    _database = await _initDB('places.db');
+    return _database;
+  }
+
+  Future<Database> _initDB(String filePath) async {
+    final dbPath = await getDatabasesPath();
+    final path = join(dbPath, filePath);
+
+    return await openDatabase(path, version: 1, onCreate: _createDB);
+  }
+
+  Future _createDB(Database db, int version) async {
+    final idType = 'INTEGER PRIMARY KEY AUTOINCREMENT';
+    final textType = 'TEXT NOT NULL';
+    final boolType = 'BOOLEAN NOT NULL';
+    final integerType = 'INTEGER NOT NULL';
+
+    await db.execute('''
+CREATE TABLE $plcTbl ( 
+  ${PlaceFields.id} $idType, 
+  ${PlaceFields.title} $textType,
+  ${PlaceFields.description} $textType,
+  ${PlaceFields.category} $textType,
+  ${PlaceFields.imageUrl} $textType,
+  ${PlaceFields.isFavorite} $boolType,
+  ${PlaceFields.time} $textType
+  )
+''');
+  }
+
+  Future<Place> create(Place place) async {
+    final db = await instance.database;
+
+    final id = await db.insert(plcTbl, place.toJson());
+    print(place.copy(id: id).toJson());
+    return place.copy(id: id);
+  }
+
+  Future<Place> readPlace(int id) async {
+    final db = await instance.database;
+
+    final maps = await db.query(
+      plcTbl,
+      columns: PlaceFields.values,
+      where: '${PlaceFields.id} = ?',
+      whereArgs: [id],
+    );
+    
+
+    if (maps.isNotEmpty) {
+      return Place.fromJson(maps.first);
+    } else {
+      throw Exception('ID $id not found');
+    }
+  }
+  
+  Future<List<Place>> readAllPlaces() async {
+    final db = await instance.database;
+
+    final orderBy = '${PlaceFields.time} ASC';
+    // final result =
+    //     await db.rawQuery('SELECT * FROM $plcTbl ORDER BY $orderBy');
+
+    final result = await db.query(plcTbl, orderBy: orderBy);
+    print(result.map((json) => Place.fromJson(json)).toList());
+    return result.map((json) => Place.fromJson(json)).toList();
+  }
+
+  Future<int> update(Place note) async {
+    final db = await instance.database;
+
+    return db.update(
+      plcTbl,
+      note.toJson(),
+      where: '${PlaceFields.id} = ?',
+      whereArgs: [note.id],
+    );
+  }
+
+  Future<int> delete(int id) async {
+    final db = await instance.database;
+
+    return await db.delete(
+      plcTbl,
+      where: '${PlaceFields.id} = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future close() async {
+    final db = await instance.database;
+
+    db.close();
+  }
+}
+
+
+
+Here in this widget I'm trying to fetch the items from the database to use them in this widget
+
+
+
+import 'package:daleel/database/place_database.dart';
+import 'package:daleel/widgets/home_widgets/places_grid.dart';
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import 'package:daleel/providers/places.dart';
+import 'package:daleel/widgets/home_widgets/image_card.dart';
+import 'package:daleel/models/place.dart';
+
+class TestScreen extends StatefulWidget {
+  @override
+  _TestScreenState createState() => _TestScreenState();
+}
+
+class _TestScreenState extends State<TestScreen> {
+  List<Place> placesList = [];
+  @override
+  Widget build(BuildContext context) {
+    Future<List<Place>> transfer() async {
+      final places = await Provider.of<PlaceDatabase>(context, listen: false).readAllPlaces();
+      setState(() {
+        placesList = [...places];
+      });
+        // print(placesList);
+      return placesList;
+
+    }
+
+    return Scaffold(
+        body: Center(
+      child: TextButton(
+        child: Text(
+          'press',
+          style: TextStyle(backgroundColor: Colors.blue, fontSize: 30),
+        ),
+        onPressed: () {
+          // transfer();
+          print(placesList);
+        },
+      ),
+    ));
+  }
+}
